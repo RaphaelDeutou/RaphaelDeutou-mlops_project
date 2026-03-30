@@ -1,0 +1,81 @@
+stages:
+  - lint
+  - test
+  - data-quality
+  - train
+  - compare-models
+  - build-docker
+  - drift-simulation
+
+variables:
+  PYTHON_VERSION: "3.11.9"
+
+lint:
+  stage: lint
+  image: python:3.11.9-slim
+  script:
+    - pip install black flake8
+    - black --check .
+    - flake8 src/ tests/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+test:
+  stage: test
+  image: python:3.11.9-slim
+  script:
+    - pip install -r requirements.txt
+    - pytest tests/ -v --cov=src
+  artifacts:
+    reports:
+      junit: test-results.xml
+
+data-quality:
+  stage: data-quality
+  image: python:3.11.9-slim
+  script:
+    - pip install -r requirements.txt
+    - python src/data/download_data.py          # assure la présence des données brutes
+    - python src/data/validate_data.py          # validation complète + blocage
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+  artifacts:
+    reports:
+      junit: test-results.xml  # optionnel
+
+train:
+  stage: train
+  image: $CI_REGISTRY_IMAGE:train
+  script:
+    - python src/train.py --config config.yaml
+  artifacts:
+    paths:
+      - mlruns/
+
+compare-models:
+  stage: compare-models
+  script:
+    - |
+      python -c "
+      import mlflow
+      client = mlflow.MlflowClient()
+      runs = client.search_runs('credit_fraud_detection')
+      latest = max(runs, key=lambda x: x.info.start_time)
+      best_prev = ...  # logique comparaison PR-AUC
+      if latest.data.metrics['pr_auc'] < best_prev - 0.01: exit(1)
+      print('Modèle promu')
+      "
+
+build-docker:
+  stage: build-docker
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$(git rev-parse --short HEAD) -f docker/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE:$(git rev-parse --short HEAD)
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+drift-simulation:
+  stage: drift-simulation
+  script:
+    - python src/monitoring/drift_simulation.py
+  when: always
