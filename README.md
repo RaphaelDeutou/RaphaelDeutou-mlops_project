@@ -1,4 +1,4 @@
-# Projet MLOps M2 - Détection de Fraude Cartes Bancaires (100% conforme au cahier des charges)
+# Projet MLOps M2 - Détection de Fraude Cartes Bancaires
 
 ## Contexte
 
@@ -42,8 +42,6 @@ docker compose run --rm train python src/data/download_data.py
 docker compose run --rm train python src/train.py --config config.yaml
 
 ## 5. Accéder à MLflow UI → http://localhost:5000
-## 6. Tester l'API de prédiction → http://localhost:8000/docs (Swagger)
-curl -X POST http://localhost:8000/predict -d '{"features": [0.0, 1.2, ...]}' -H "Content-Type: application/json"
 
 ## 7. Simulation drift + alerte
 docker compose run --rm train python src/monitoring/drift_simulation.py
